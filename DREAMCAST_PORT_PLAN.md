@@ -237,7 +237,7 @@ limits), full-game `pak1.pak`, and BBA networking.
 
 ## 7. Implementation status
 
-**Phase 1 (compile/link scaffolding) — done in this branch:**
+**Phase 1 (compile/link scaffolding) — done:**
 
 * `source/port.h` — `DREAMCAST` → 320×240.
 * `source/zone.c` — `Memory_GetSize()` capped at 8 MB for `DREAMCAST`.
@@ -251,6 +251,14 @@ limits), full-game `pak1.pak`, and BBA networking.
   `snd_stream_poll()` from `SNDDMA_Submit`.
 * `Makefile.dreamcast` — `kos-cc` build; SDL backends swapped for the KOS ones.
 * `scripts/dc/make_cdi.sh` — ELF → `1ST_READ.BIN` → ISO (+IP.BIN) → `.CDI`.
+
+**Phase 2–4 (playable controller + present polish) — in progress on
+`cursor/dreamcast-phase2-playable-89ff`:**
+
+* `source/in_dc.c` — single-stick layout: stick X turns, stick Y walks,
+  analog triggers strafe, d-pad looks/strafes; DC-specific default binds
+  applied in `IN_Init()` so the pad works without a mouse or keyboard.
+* `source/vid_dc.c` — `vid_waitvbl()` after each frame present to reduce tearing.
 
 **CI build — verified green, produces a bootable CDI.** A GitHub Actions
 workflow (`.github/workflows/dreamcast.yml`) builds the target inside the
@@ -269,9 +277,9 @@ packaging chain and uploads four artifacts:
 
 > What CI proves: the KOS backends compile and link against the real toolchain,
 > and the build packages into a bootable `.cdi` (loadable in Flycast/Redream).
-> What it does NOT prove: runtime correctness, and the CI image carries no game
-> data, so the disc boots but finds no `id1/pak0.pak`. Phases 2–4 (emulator/
-> hardware boot-test with real id1 data, then tune video/input/sound) are next.
+> What it does NOT prove: runtime correctness on hardware/emulator with real
+> `id1` data.  Next up: emulator boot-test with `pak0.pak` on the disc, then VMU
+> config/save support (Phase 5).
 
 ## 8. References
 

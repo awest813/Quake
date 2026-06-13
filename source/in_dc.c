@@ -22,9 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  * The first Maple controller is polled every frame.  Buttons are diffed against
  * the previous frame and turned into Key_Event()s; the analog stick and the
- * analog triggers drive movement through IN_Move().  Defaults are chosen so the
- * menus and basic movement work out of the box, while everything stays
- * rebindable from the console.
+ * analog triggers drive movement and look through IN_Move().  Defaults are chosen
+ * so the menus and basic movement work out of the box on a single-stick pad.
  */
 
 #include <kos.h>
@@ -34,15 +33,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "client.h"
 #include "cvar.h"
+#include "host.h"
 #include "keys.h"
+#include "mathlib.h"
 #include "sys.h"
 
 cvar_t _windowed_mouse = { "_windowed_mouse", "0", true };
 
 /* Analog stick dead zone (stick range is -128..127). */
 #define DC_STICK_DEADZONE 24
-/* Trigger threshold for treating an analog trigger as a digital button. */
-#define DC_TRIG_THRESHOLD 64
+/* Trigger threshold for treating an analog trigger as strafe input. */
+#define DC_TRIG_THRESHOLD 8
 
 static uint32_t old_buttons = 0;
 
@@ -55,19 +56,39 @@ static const struct {
     { CONT_DPAD_DOWN,  K_DOWNARROW },
     { CONT_DPAD_LEFT,  K_LEFTARROW },
     { CONT_DPAD_RIGHT, K_RIGHTARROW },
-    { CONT_A,          K_ENTER },	/* menu accept / bindable (e.g. +jump) */
-    { CONT_B,          K_SPACE },	/* +jump by default bind */
-    { CONT_X,          K_CTRL },	/* +attack */
-    { CONT_Y,          K_SHIFT },	/* +speed (run) */
-    { CONT_START,      K_ESCAPE },	/* menu */
+    { CONT_A,          K_ENTER },	/* A: jump */
+    { CONT_B,          K_SPACE },	/* B: attack */
+    { CONT_X,          K_CTRL },	/* X: use */
+    { CONT_Y,          K_SHIFT },	/* Y: run */
+    { CONT_START,      K_ESCAPE },	/* Start: menu */
 };
 
 #define DC_NUM_BUTTONS (sizeof(dc_buttonmap) / sizeof(dc_buttonmap[0]))
+
+static void
+IN_DC_SetDefaultBindings(void)
+{
+    /*
+     * Applied after quake.rc so a Dreamcast pad is playable without a mouse.
+     * Stick X/Y and triggers are handled in IN_Move(); these cover buttons and
+     * the d-pad (strafe / look).
+     */
+    Key_SetBinding(K_ENTER, "+jump");
+    Key_SetBinding(K_SPACE, "+attack");
+    Key_SetBinding(K_CTRL, "+use");
+    Key_SetBinding(K_SHIFT, "+speed");
+    Key_SetBinding(K_ESCAPE, "togglemenu");
+    Key_SetBinding(K_UPARROW, "+lookup");
+    Key_SetBinding(K_DOWNARROW, "+lookdown");
+    Key_SetBinding(K_LEFTARROW, "+moveleft");
+    Key_SetBinding(K_RIGHTARROW, "+moveright");
+}
 
 void
 IN_Init(void)
 {
     old_buttons = 0;
+    IN_DC_SetDefaultBindings();
 }
 
 void
@@ -79,6 +100,7 @@ void
 IN_Commands(void)
 {
 }
+
 
 /*
 ================
@@ -102,13 +124,6 @@ Sys_SendKeyEvents(void)
 	return;
 
     buttons = st->buttons;
-
-    /* Treat the analog triggers as two extra digital buttons. */
-    if (st->ltrig > DC_TRIG_THRESHOLD)
-	buttons |= CONT_C;	/* left trigger -> reuse spare bit */
-    if (st->rtrig > DC_TRIG_THRESHOLD)
-	buttons |= CONT_Z;	/* right trigger -> reuse spare bit */
-
     changed = buttons ^ old_buttons;
 
     for (i = 0; i < DC_NUM_BUTTONS; i++) {
@@ -117,18 +132,12 @@ Sys_SendKeyEvents(void)
 	    Key_Event(dc_buttonmap[i].key, (buttons & bit) != 0);
     }
 
-    /* Triggers as rebindable AUX keys. */
-    if (changed & CONT_C)
-	Key_Event(K_AUX1, (buttons & CONT_C) != 0);	/* left trigger */
-    if (changed & CONT_Z)
-	Key_Event(K_AUX2, (buttons & CONT_Z) != 0);	/* right trigger */
-
     old_buttons = buttons;
 }
 
 /*
 ================
-IN_Move -- analog stick drives strafing/forward movement
+IN_Move -- analog stick drives turn/forward; triggers strafe
 ================
 */
 void
@@ -137,6 +146,7 @@ IN_Move(usercmd_t *cmd)
     maple_device_t *dev;
     cont_state_t *st;
     int jx, jy;
+    float speed;
 
     dev = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
     if (!dev)
@@ -149,10 +159,26 @@ IN_Move(usercmd_t *cmd)
     jx = st->joyx;
     jy = st->joyy;
 
-    if (jx > DC_STICK_DEADZONE || jx < -DC_STICK_DEADZONE)
-	cmd->sidemove += cl_sidespeed.value * (jx / 128.0f);
+    if (cls.state == ca_active) {
+	if ((in_speed.state & 1) ^ (int)cl_run.value)
+	    speed = host_frametime * cl_anglespeedkey.value;
+	else
+	    speed = host_frametime;
+
+	if (jx > DC_STICK_DEADZONE || jx < -DC_STICK_DEADZONE) {
+	    cl.viewangles[YAW] -=
+		speed * cl_yawspeed.value * (jx / 128.0f);
+	    cl.viewangles[YAW] = anglemod(cl.viewangles[YAW]);
+	}
+    }
+
     if (jy > DC_STICK_DEADZONE || jy < -DC_STICK_DEADZONE)
 	cmd->forwardmove -= cl_forwardspeed.value * (jy / 128.0f);
+
+    if (st->ltrig > DC_TRIG_THRESHOLD)
+	cmd->sidemove -= cl_sidespeed.value * (st->ltrig / 255.0f);
+    if (st->rtrig > DC_TRIG_THRESHOLD)
+	cmd->sidemove += cl_sidespeed.value * (st->rtrig / 255.0f);
 }
 
 /*

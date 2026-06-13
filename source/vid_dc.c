@@ -142,6 +142,8 @@ VID_Update(vrect_t *rects)
 	    d1 += 2;
 	}
     }
+
+    vid_waitvbl();
 }
 
 /*
