@@ -66,6 +66,21 @@ fi
 #    needed.  Field labels and the JUE/E000F10/VGA values are the standard
 #    homebrew set.
 if [ -n "$MAKEIP" ]; then
+    # This makeip needs the Sega bootstrap template IP.TMPL in the CWD.  Locate
+    # one in the image; if none exists it cannot build IP.BIN (asset, not bug).
+    if [ ! -f IP.TMPL ]; then
+        for c in "$(dirname "$MAKEIP")/IP.TMPL" \
+                 /usr/local/share/makeip/IP.TMPL \
+                 "$KOS_BASE/utils/makeip/IP.TMPL"; do
+            [ -f "$c" ] && { cp "$c" IP.TMPL; break; }
+        done
+        [ -f IP.TMPL ] || {
+            found=$(find / -iname 'IP.TMPL' 2>/dev/null | head -1)
+            [ -n "$found" ] && cp "$found" IP.TMPL
+        }
+    fi
+    [ -f IP.TMPL ] && echo "using IP.TMPL: $(ls -l IP.TMPL)" \
+                   || echo "warning: no IP.TMPL found in image; cannot build IP.BIN"
     cat > ip.txt <<EOF
 Hardware ID   : SEGA SEGAKATANA
 Maker ID      : SEGA ENTERPRISES
