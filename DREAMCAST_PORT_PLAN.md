@@ -235,7 +235,29 @@ limits), full-game `pak1.pak`, and BBA networking.
 
 ---
 
-## 7. References
+## 7. Implementation status
+
+**Phase 1 (compile/link scaffolding) — done in this branch:**
+
+* `source/port.h` — `DREAMCAST` → 320×240.
+* `source/zone.c` — `Memory_GetSize()` capped at 8 MB for `DREAMCAST`.
+* `source/sys_dc.c` — KOS init (`KOS_INIT_FLAGS(INIT_DEFAULT)`), timing via
+  `timer_us_gettime64`, file I/O over newlib, fixed-argv `main()`, `basedir=/cd`.
+* `source/vid_dc.c` — 320×240 8-bit offscreen → RGB565 present (2× pixel-doubled
+  into the 640×480 framebuffer), palette LUT, surface-cache setup, direct-rect.
+* `source/in_dc.c` — Maple controller polling → `Key_Event`, analog stick →
+  `IN_Move`, triggers as `K_AUX1/2`.
+* `source/snd_dc.c` — AICA `snd_stream` backend with a ring buffer pumped by
+  `snd_stream_poll()` from `SNDDMA_Submit`.
+* `Makefile.dreamcast` — `kos-cc` build; SDL backends swapped for the KOS ones.
+* `scripts/dc/make_cdi.sh` — ELF → `1ST_READ.BIN` → ISO (+IP.BIN) → `.CDI`.
+
+> These compile against the engine's symbol contract (verified statically), but
+> have **not** been built with DreamSDK in this environment — the KallistiOS
+> toolchain isn't present here. Phases 2–4 (boot-test on emulator/hardware, then
+> tune video/input/sound) are the next step and require a DreamSDK build.
+
+## 8. References
 
 * Dreamcast Programming — IP.BIN and 1ST_READ.BIN: https://mc.pp.se/dc/ip.bin.html
 * Creating a bootable Dreamcast disc (dreamcast.wiki): https://dreamcast.wiki/Creating_a_bootable_Dreamcast_disc

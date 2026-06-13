@@ -15,6 +15,9 @@ extern int32_t spacing_x_res;
 #elif defined(PAPK3S)
 #define BASEWIDTH 800
 #define BASEHEIGHT 480
+#elif defined(DREAMCAST)
+#define BASEWIDTH 320
+#define BASEHEIGHT 240
 #else
 #define BASEWIDTH 1280
 #define BASEHEIGHT 720
