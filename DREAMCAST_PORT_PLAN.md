@@ -252,19 +252,26 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `Makefile.dreamcast` — `kos-cc` build; SDL backends swapped for the KOS ones.
 * `scripts/dc/make_cdi.sh` — ELF → `1ST_READ.BIN` → ISO (+IP.BIN) → `.CDI`.
 
-**CI build — verified green.** A GitHub Actions workflow
-(`.github/workflows/dreamcast.yml`) builds the target inside the
-`nold360/kallistios-sdk` container on every push. As of commit `75559de`,
-`kos-cc` compiles all sources — including `vid_dc`, `in_dc`, `snd_dc`, `sys_dc`
-— and links a **3.7 MB `quake.elf`** for SH-4 with no errors (only two
-pre-existing `%f`/`float` format warnings in `zone.c`). The CDI step is
-best-effort and self-skips when `makeip`/`genisoimage`/`cdi4dc` are absent from
-the image.
+**CI build — verified green, produces a bootable CDI.** A GitHub Actions
+workflow (`.github/workflows/dreamcast.yml`) builds the target inside the
+`nold360/kallistios-sdk` container on every push. `kos-cc` compiles all sources
+— including `vid_dc`, `in_dc`, `snd_dc`, `sys_dc` — and links a **3.7 MB
+`quake.elf`** for SH-4 with no errors (only pre-existing `%f`/`float` format
+warnings, unrelated to the port). `scripts/dc/make_cdi.sh` then runs the full
+packaging chain and uploads four artifacts:
 
-> What CI proves: the KOS backends compile and link against the real toolchain.
-> What it does NOT prove: runtime correctness. Phases 2–4 (boot-test on
-> emulator/hardware, then tune video/input/sound, and wire up a full CDI with
-> id1 data) are the next step.
+| Artifact            | Size       | Stage |
+|---------------------|-----------:|-------|
+| `quake.elf`         | 3,734,844  | SH-4 ELF (kos-cc link) |
+| `cd_root/1ST_READ.BIN` | 664,940 | objcopy → scramble (bootable program) |
+| `IP.BIN`            | 32,768     | makeip (ip.txt + IP.TMPL bootstrap) |
+| `quake.cdi`         | 2,600,868  | genisoimage → cdi4dc (bootable disc image) |
+
+> What CI proves: the KOS backends compile and link against the real toolchain,
+> and the build packages into a bootable `.cdi` (loadable in Flycast/Redream).
+> What it does NOT prove: runtime correctness, and the CI image carries no game
+> data, so the disc boots but finds no `id1/pak0.pak`. Phases 2–4 (emulator/
+> hardware boot-test with real id1 data, then tune video/input/sound) are next.
 
 ## 8. References
 
