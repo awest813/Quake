@@ -60,12 +60,27 @@ else
     echo "warning: ./id1 not found; the disc will boot but find no game data." >&2
 fi
 
-# 3) Boot metadata (IP.BIN).  The DreamSDK makeip generates a homebrew default
-#    when given just an output path; fall back to passing a game title.
+# 3) Boot metadata (IP.BIN).  This makeip is the classic Marcus Comstedt tool
+#    (Usage: makeip ip.txt IP.BIN), so generate the ip.txt template it expects.
+#    The bootstrap is embedded in this makeip build, so no separate IP.TMPL is
+#    needed.  Field labels and the JUE/E000F10/VGA values are the standard
+#    homebrew set.
 if [ -n "$MAKEIP" ]; then
-    "$MAKEIP" IP.BIN 2>/dev/null \
-        || "$MAKEIP" -g "$VOLNAME" IP.BIN 2>/dev/null \
-        || { echo "warning: makeip failed; dumping usage:"; "$MAKEIP" --help 2>&1 | head -20 || true; }
+    cat > ip.txt <<EOF
+Hardware ID   : SEGA SEGAKATANA
+Maker ID      : SEGA ENTERPRISES
+Device Info   : 0000 GD-ROM1/1
+Area Symbols  : JUE
+Peripherals   : E000F10
+Product No    : T-0000
+Version       : V1.000
+Release Date  : $(date +%Y%m%d)
+Boot Filename : 1ST_READ.BIN
+SW Maker Name : KallistiOS
+Game Title    : $VOLNAME
+EOF
+    "$MAKEIP" ip.txt IP.BIN \
+        || { echo "warning: makeip failed; dumping usage:"; "$MAKEIP" 2>&1 | head -20 || true; }
 fi
 
 # 4) ISO9660 data track (+IP.BIN bootstrap) then convert to CDI.
