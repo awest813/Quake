@@ -252,10 +252,19 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `Makefile.dreamcast` — `kos-cc` build; SDL backends swapped for the KOS ones.
 * `scripts/dc/make_cdi.sh` — ELF → `1ST_READ.BIN` → ISO (+IP.BIN) → `.CDI`.
 
-> These compile against the engine's symbol contract (verified statically), but
-> have **not** been built with DreamSDK in this environment — the KallistiOS
-> toolchain isn't present here. Phases 2–4 (boot-test on emulator/hardware, then
-> tune video/input/sound) are the next step and require a DreamSDK build.
+**CI build — verified green.** A GitHub Actions workflow
+(`.github/workflows/dreamcast.yml`) builds the target inside the
+`nold360/kallistios-sdk` container on every push. As of commit `75559de`,
+`kos-cc` compiles all sources — including `vid_dc`, `in_dc`, `snd_dc`, `sys_dc`
+— and links a **3.7 MB `quake.elf`** for SH-4 with no errors (only two
+pre-existing `%f`/`float` format warnings in `zone.c`). The CDI step is
+best-effort and self-skips when `makeip`/`genisoimage`/`cdi4dc` are absent from
+the image.
+
+> What CI proves: the KOS backends compile and link against the real toolchain.
+> What it does NOT prove: runtime correctness. Phases 2–4 (boot-test on
+> emulator/hardware, then tune video/input/sound, and wire up a full CDI with
+> id1 data) are the next step.
 
 ## 8. References
 
