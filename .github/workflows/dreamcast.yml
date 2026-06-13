@@ -29,30 +29,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Probe packaging tools in image
-        run: |
-          docker run --rm --entrypoint bash -v "$PWD":/src -w /src \
-            nold360/kallistios-sdk:latest -c '
-              [ -z "$KOS_BASE" ] && [ -f /opt/toolchains/dc/kos/environ.sh ] && . /opt/toolchains/dc/kos/environ.sh
-              echo "=== tool availability ==="
-              for t in mkdcdisc scramble makeip genisoimage mkisofs xorriso cdi4dc cdirip img4dc objcopy sh-elf-objcopy; do
-                printf "%-16s %s\n" "$t" "$(command -v $t 2>/dev/null || echo MISSING)"
-              done
-              echo "=== KOS utils dir ==="
-              ls -1 "$KOS_BASE/utils" 2>/dev/null || echo "no utils dir"
-              echo "=== scramble dir ==="
-              ls -1 "$KOS_BASE/utils/scramble" 2>/dev/null || echo MISSING
-              echo "=== makeip dir ==="
-              ls -1 "$KOS_BASE/utils/makeip" 2>/dev/null || echo MISSING
-              echo "=== apt available? ==="
-              command -v apt-get >/dev/null && echo "apt-get present" || echo "no apt-get"
-            '
-
-      - name: Build Dreamcast target in KallistiOS container
+      - name: Build Dreamcast ELF and CDI in KallistiOS container
         run: |
           # NOTE: the image's default entrypoint is a wrapper that only runs a
           # bare command (e.g. `make`) and mangles `bash -c`, so we override it
           # with --entrypoint bash and source the KOS environment ourselves.
+          # The image provides scramble/makeip/genisoimage/cdi4dc in
+          # /usr/local/bin, so make_cdi.sh produces a real bootable .cdi.
           docker run --rm --entrypoint bash -v "$PWD":/src -w /src \
             nold360/kallistios-sdk:latest -c '
               set -e
@@ -66,10 +49,9 @@ jobs:
               make -f Makefile.dreamcast
               test -f quake.elf
               ls -l quake.elf
-              # scramble/makeip ship with KOS; genisoimage/cdi4dc may not, so the
-              # CDI step is informational rather than required.
-              ./scripts/dc/make_cdi.sh quake.elf quake.cdi \
-                || echo "CDI packaging tools not available in this image; skipping."
+              sh ./scripts/dc/make_cdi.sh quake.elf quake.cdi
+              echo "=== produced artifacts ==="
+              ls -l quake.elf quake.cdi cd_root/1ST_READ.BIN IP.BIN 2>/dev/null || true
             '
 
       - name: Upload build artifacts
@@ -79,4 +61,6 @@ jobs:
           path: |
             quake.elf
             quake.cdi
+            cd_root/1ST_READ.BIN
+            IP.BIN
           if-no-files-found: warn
