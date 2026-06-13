@@ -1,0 +1,66 @@
+name: Dreamcast Build
+
+# Builds the Dreamcast target using the maintained KallistiOS SDK image
+# (nold360/kallistios-sdk).  That image ships an old glibc, so GitHub's bundled
+# Node.js (used by actions/checkout) cannot run *inside* it.  We therefore run
+# the job on the host runner -- where checkout/node work -- and invoke the SDK
+# image only for the compile via `docker run`, mounting the workspace at /src.
+
+on:
+  push:
+    branches: [ "**" ]
+    paths:
+      - 'source/**'
+      - 'Makefile.dreamcast'
+      - 'scripts/dc/**'
+      - '.github/workflows/dreamcast.yml'
+  pull_request:
+    paths:
+      - 'source/**'
+      - 'Makefile.dreamcast'
+      - 'scripts/dc/**'
+      - '.github/workflows/dreamcast.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Dreamcast ELF and CDI in KallistiOS container
+        run: |
+          # NOTE: the image's default entrypoint is a wrapper that only runs a
+          # bare command (e.g. `make`) and mangles `bash -c`, so we override it
+          # with --entrypoint bash and source the KOS environment ourselves.
+          # The image provides scramble/makeip/genisoimage/cdi4dc in
+          # /usr/local/bin, so make_cdi.sh produces a real bootable .cdi.
+          docker run --rm --entrypoint bash -v "$PWD":/src -w /src \
+            nold360/kallistios-sdk:latest -c '
+              set -e
+              if [ -z "$KOS_BASE" ] && [ -f /opt/toolchains/dc/kos/environ.sh ]; then
+                . /opt/toolchains/dc/kos/environ.sh
+              fi
+              echo "KOS_BASE=$KOS_BASE"
+              command -v kos-cc
+              # git describe powers the version string; tolerate ownership warnings.
+              git config --global --add safe.directory /src || true
+              make -f Makefile.dreamcast
+              test -f quake.elf
+              ls -l quake.elf
+              sh ./scripts/dc/make_cdi.sh quake.elf quake.cdi
+              echo "=== produced artifacts ==="
+              ls -l quake.elf quake.cdi cd_root/1ST_READ.BIN IP.BIN 2>/dev/null || true
+            '
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quake-dreamcast
+          path: |
+            quake.elf
+            quake.cdi
+            cd_root/1ST_READ.BIN
+            IP.BIN
+          if-no-files-found: warn

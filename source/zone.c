@@ -1211,6 +1211,16 @@ Memory_GetSize(void)
     if (parm && com_argc > parm + 1)
 	return (size_t)atoi(com_argv[parm + 1]) << 10;
 
+#ifdef DREAMCAST
+    /*
+     * The Dreamcast only has 16MB of main RAM, so the 128MB default is not an
+     * option.  8MB is enough for the hunk, surface cache and sound buffers when
+     * rendering the shareware id1 data at 320x240.  Tune after profiling with
+     * the "hunk" / "cache" console commands.
+     */
+    return (size_t)8 << 20;
+#endif
+
     /* Default memory is now 128MB */
     return (size_t)128 << 20;
 }
