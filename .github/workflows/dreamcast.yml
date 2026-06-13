@@ -31,11 +31,12 @@ jobs:
 
       - name: Build Dreamcast target in KallistiOS container
         run: |
-          docker run --rm -v "$PWD":/src -w /src \
-            nold360/kallistios-sdk:latest \
-            bash -c '
+          # NOTE: the image's default entrypoint is a wrapper that only runs a
+          # bare command (e.g. `make`) and mangles `bash -c`, so we override it
+          # with --entrypoint bash and source the KOS environment ourselves.
+          docker run --rm --entrypoint bash -v "$PWD":/src -w /src \
+            nold360/kallistios-sdk:latest -c '
               set -e
-              # Source KOS env defensively in case the image entrypoint did not.
               if [ -z "$KOS_BASE" ] && [ -f /opt/toolchains/dc/kos/environ.sh ]; then
                 . /opt/toolchains/dc/kos/environ.sh
               fi
@@ -44,6 +45,7 @@ jobs:
               # git describe powers the version string; tolerate ownership warnings.
               git config --global --add safe.directory /src || true
               make -f Makefile.dreamcast
+              test -f quake.elf
               ls -l quake.elf
               # scramble/makeip ship with KOS; genisoimage/cdi4dc may not, so the
               # CDI step is informational rather than required.
