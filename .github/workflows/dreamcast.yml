@@ -1,0 +1,81 @@
+name: Dreamcast Build
+
+# Builds the Dreamcast target inside the maintained KallistiOS SDK container
+# (nold360/kallistios-sdk), so the SH-4 toolchain / KOS API calls in the
+# sys_dc / vid_dc / in_dc / snd_dc backends get compiled on every push.
+
+on:
+  push:
+    branches: [ "**" ]
+    paths:
+      - 'source/**'
+      - 'Makefile.dreamcast'
+      - 'scripts/dc/**'
+      - '.github/workflows/dreamcast.yml'
+  pull_request:
+    paths:
+      - 'source/**'
+      - 'Makefile.dreamcast'
+      - 'scripts/dc/**'
+      - '.github/workflows/dreamcast.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: nold360/kallistios-sdk:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Source KOS environment
+        shell: bash
+        run: |
+          # The image ships KallistiOS under the standard toolchain prefix.
+          # Persist the env vars for later steps via $GITHUB_ENV.
+          for env in /opt/toolchains/dc/kos/environ.sh "$KOS_BASE/environ.sh"; do
+            if [ -f "$env" ]; then
+              . "$env"
+              break
+            fi
+          done
+          if [ -z "$KOS_BASE" ]; then
+            echo "::error::Could not locate the KallistiOS environment in the image" >&2
+            exit 1
+          fi
+          {
+            echo "KOS_BASE=$KOS_BASE"
+            echo "KOS_CC_BASE=$KOS_CC_BASE"
+            echo "PATH=$PATH"
+          } >> "$GITHUB_ENV"
+          echo "KOS_BASE=$KOS_BASE"
+          command -v kos-cc
+
+      - name: Build Dreamcast ELF
+        shell: bash
+        run: |
+          set -e
+          # git describe powers the version string; tolerate the CI checkout's
+          # ownership warnings so it cleanly falls back to the release tag.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+          make -f Makefile.dreamcast
+          ls -l quake.elf
+
+      - name: Build CDI (best effort)
+        shell: bash
+        continue-on-error: true
+        run: |
+          # scramble/makeip ship with KOS; genisoimage/cdi4dc may not be present
+          # in the image, so this step is informational rather than required.
+          ./scripts/dc/make_cdi.sh quake.elf quake.cdi || \
+            echo "CDI packaging tools not available in this image; skipping."
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quake-dreamcast
+          path: |
+            quake.elf
+            quake.cdi
+          if-no-files-found: warn
