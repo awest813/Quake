@@ -80,6 +80,10 @@ It is a planning document only — no engine code is changed by this commit.
    list) and `cd_null.c` (already wired). CDDA music and BBA/modem networking are
    clearly-scoped follow-ups, not part of the first bootable build.
 
+7. **Writable storage on VMU.** `/cd` is read-only; configs and save games are
+   stored under `/vmu/a1/tyrquake/id1`, mirroring the Unix `~/.tyrquake/id1`
+   overlay used by other TyrQuake targets.
+
 ---
 
 ## 3. Files to add / change
@@ -105,8 +109,8 @@ Add a DC cap so the default (no command line) is safe:
 * `Sys_Init`, `Sys_Error`, `Sys_Quit`, `Sys_Printf` (to dbgio/serial console).
 * `Sys_DoubleTime` via KOS `timer_ms_gettime()` / `timer_us_gettime()`.
 * `Sys_FileTime`, `Sys_mkdir`, `Sys_FileOpenRead/Write` — newlib POSIX on `/cd`
-  works for reads; writes (configs/saves) target the **VMU** via `/vmu/a1/...`
-  or are stubbed initially.
+  works for reads; writes (configs/saves) go to `/vmu/a1/tyrquake/id1` via the
+  writable search-path overlay in `common.c`.
 * `main()`:
   * KOS init: declare `KOS_INIT_FLAGS(INIT_DEFAULT)` and a romdisk stub.
   * No argv on hardware → build a fixed arg vector (`"quake"`,
@@ -252,13 +256,20 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `Makefile.dreamcast` — `kos-cc` build; SDL backends swapped for the KOS ones.
 * `scripts/dc/make_cdi.sh` — ELF → `1ST_READ.BIN` → ISO (+IP.BIN) → `.CDI`.
 
-**Phase 2–4 (playable controller + present polish) — in progress on
+**Phase 2–4 (playable controller + present polish) — done on
 `cursor/dreamcast-phase2-playable-89ff`:**
 
 * `source/in_dc.c` — single-stick layout: stick X turns, stick Y walks,
   analog triggers strafe, d-pad looks/strafes; DC-specific default binds
   applied in `IN_Init()` so the pad works without a mouse or keyboard.
 * `source/vid_dc.c` — `vid_waitvbl()` after each frame present to reduce tearing.
+
+**Phase 5 (VMU saves, partial) — in progress:**
+
+* `source/common.c` — writable overlay at `/vmu/a1/tyrquake/id1` for
+  `config.cfg` and `s*.sav` (read-only `/cd` still serves pak data).
+* `scripts/dc/build_disc.sh` — one-step ELF + CDI build when `id1/pak0.pak` is
+  supplied locally (`QUAKE_ID1` env or copy into tree).
 
 **CI build — verified green, produces a bootable CDI.** A GitHub Actions
 workflow (`.github/workflows/dreamcast.yml`) builds the target inside the
@@ -278,8 +289,8 @@ packaging chain and uploads four artifacts:
 > What CI proves: the KOS backends compile and link against the real toolchain,
 > and the build packages into a bootable `.cdi` (loadable in Flycast/Redream).
 > What it does NOT prove: runtime correctness on hardware/emulator with real
-> `id1` data.  Next up: emulator boot-test with `pak0.pak` on the disc, then VMU
-> config/save support (Phase 5).
+> `id1` data.  Use `scripts/dc/build_disc.sh` with a local `pak0.pak` to produce
+> a playable image; attach a VMU in slot A1 for config/save persistence.
 
 ## 8. References
 
