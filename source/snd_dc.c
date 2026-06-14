@@ -50,17 +50,26 @@ static uint8_t *dc_buf;
 static unsigned rpos;
 static unsigned wpos;
 
-/* Linear scratch handed back to KOS each callback. */
-static uint8_t cbbuf[SND_STREAM_BUFFER_MAX];
+/*
+ * Linear scratch handed back to KOS each callback.  KOS snd_stream_fill()
+ * passes smp_req/smp_recv in bytes (16-bit stereo PCM = interleaved int16).
+ * 32-byte alignment is recommended by KOS for DMA into AICA RAM.
+ */
+static uint8_t cbbuf[SND_STREAM_BUFFER_MAX] __attribute__((aligned(32)));
 
 static void *
-stream_cb(snd_stream_hnd_t hnd, int smp_req, int *smp_recv)
+stream_cb(snd_stream_hnd_t hnd, int bytes_req, int *bytes_recv)
 {
-    int len = smp_req;
+    int len = bytes_req;
     int off = 0;
     unsigned used, chunk, first;
 
     (void)hnd;
+
+    if (len <= 0) {
+	*bytes_recv = 0;
+	return cbbuf;
+    }
 
     if (len > (int)sizeof(cbbuf))
 	len = sizeof(cbbuf);
@@ -97,7 +106,7 @@ stream_cb(snd_stream_hnd_t hnd, int smp_req, int *smp_recv)
 	len -= chunk;
     }
 
-    *smp_recv = off;
+    *bytes_recv = off;
     return cbbuf;
 }
 

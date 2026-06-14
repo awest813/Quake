@@ -79,6 +79,7 @@ DC_PVR_Init(void)
     dc_rgb565 = Hunk_AllocName(DC_TEX_W * DC_TEX_H * 2, "dc_rgb565");
     if (!dc_rgb565)
 	Sys_Error("Not enough memory for RGB565 scratch\n");
+    memset(dc_rgb565, 0, DC_TEX_W * DC_TEX_H * sizeof(*dc_rgb565));
 
     pvr_poly_cxt_txr(&cxt, PVR_LIST_OP_POLY,
 		     PVR_TXRFMT_RGB565 | PVR_TXRFMT_NONTWIDDLED,
@@ -91,8 +92,8 @@ static void
 DC_PVR_Present(void)
 {
     pvr_vertex_t vert;
-    const float umax = (float)BASEWIDTH / (float)DC_TEX_W;
-    const float vmax = (float)BASEHEIGHT / (float)DC_TEX_H;
+    const float umax = (float)(BASEWIDTH - 1) / (float)DC_TEX_W;
+    const float vmax = (float)(BASEHEIGHT - 1) / (float)DC_TEX_H;
 
     pvr_scene_begin();
     pvr_list_begin(PVR_LIST_OP_POLY);

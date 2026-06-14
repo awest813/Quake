@@ -88,12 +88,18 @@ remaining step before calling the port fully verified.
 
 * **Input:** `IN_DC_ApplyBindings()` runs after `exec quake.rc` so keyboard
   defaults from the pak do not override the pad layout.
-* **Sound:** `stream_cb` ring-buffer read handles wrap and zero-fills underruns.
+* **Sound:** `stream_cb` ring-buffer read handles wrap and zero-fills underruns;
+  callback buffer is 32-byte aligned; `smp_req`/`smp_recv` are bytes (KOS
+  `snd_stream_fill` convention for 16-bit PCM).
 * **Video:** `dcache_flush_range` before PVR texture upload; guard if PVR init
-  failed.
+  failed; UV coords sample texels `0..319` / `0..239` so Po2 padding is never
+  read.
 * **VMU:** VMS `app_id` set to `TyrQuake\DC`; simple icon; error logging on
   failed writes; `DC_FClose(NULL)` safe.
-* **Saves:** `load` closes the VMU staging file if map spawn fails.
+* **Saves:** `load` closes the VMU staging file if map spawn fails; parse
+  errors close the file before `Sys_Error`.
+* **Demos:** demo recording uses `DC_FOpen`/`DC_FClose` so `.dem` files are
+  VMS-packaged on the VMU like saves.
 * **Filesystem:** `COM_FOpenFile` skips unreadable VMU paths instead of crashing
   `COM_filelength`.
 
