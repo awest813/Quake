@@ -270,10 +270,12 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `source/vid_dc.c` — replaced CPU 2× pixel-doubled blit to `vram_s` with a
   PVR textured quad so the 320→640 upscale runs on the graphics chip.
 
-**Phase 5 (VMU saves, partial) — done:**
+**Phase 5 (VMU saves) — done:**
 
-* `source/common.c` — writable overlay at `/vmu/a1/tyrquake/id1` for
-  `config.cfg` and `s*.sav` (read-only `/cd` still serves pak data).
+* `source/common.c` — writable search path at flat `/vmu/a1` (VMU has no
+  subdirectories).
+* `source/vmu_dc.c` — stage writes through `/ram`, wrap with `vmu_pkg_build` on
+  close; unwrap packages on read.  Used for `config.cfg`, `s*.sav`, screenshots.
 * `scripts/dc/build_disc.sh` — one-step ELF + CDI build when `id1/pak0.pak` is
   supplied locally (`QUAKE_ID1` env or copy into tree).
 * `scripts/dc/run_flycast.sh` — convenience launcher when Flycast is on PATH.
