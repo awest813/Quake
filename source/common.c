@@ -48,6 +48,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "net.h"
 #include "shell.h"
 #include "sys.h"
+#include "vmu_dc.h"
 #include "zone.h"
 
 #define NUM_SAFE_ARGVS 7
@@ -1499,15 +1500,15 @@ COM_WriteFile(const char *filename, const void *data, int len)
 
     snprintf(name, sizeof(name), "%s/%s", com_gamedir, filename);
 
-    f = fopen(name, "wb");
+    f = DC_FOpen(name, "wb");
     if (!f) {
 	Sys_mkdir(com_gamedir);
-	f = fopen(name, "wb");
+	f = DC_FOpen(name, "wb");
 	if (!f)
 	    Sys_Error("Error opening %s", filename);
     }
     fwrite(data, 1, len, f);
-    fclose(f);
+    DC_FClose(f);
 }
 
 
@@ -1591,7 +1592,7 @@ COM_FOpenFile(const char *filename, FILE **file)
 	    if (findtime == -1)
 		continue;
 
-	    *file = fopen(path, "rb");
+	    *file = DC_FOpen(path, "rb");
 	    com_filesize = COM_filelength(*file);
 	    return com_filesize;
 	}
@@ -1956,7 +1957,6 @@ COM_AddGameDirectory(const char *base, const char *dir)
 #ifdef DREAMCAST
 /* GD-ROM (/cd) is read-only; configs and saves go to the first VMU. */
 #define COM_WRITABLE_BASE "/vmu/a1"
-#define COM_WRITABLE_PREFIX "tyrquake"
 #else
 #define COM_WRITABLE_BASE NULL
 #define COM_WRITABLE_PREFIX ".tyrquake"
@@ -1966,13 +1966,30 @@ COM_AddGameDirectory(const char *base, const char *dir)
 ================
 COM_AddWritableGameDirectory
 
-Adds a writable overlay for configs/saves, mirroring the Unix ~/.tyrquake
-layout.  On Dreamcast this maps to /vmu/a1/tyrquake/<gamedir>.
+Adds a writable overlay for configs/saves.  On Unix this is ~/.tyrquake/<gamedir>.
+On Dreamcast the VMU is flat (no subdirectories), so we add /vmu/a1 once.
 ================
 */
 static void
 COM_AddWritableGameDirectory(const char *gamedir)
 {
+#ifdef DREAMCAST
+    static qboolean vmu_added;
+
+    (void)gamedir;
+    if (vmu_added)
+	return;
+    {
+	searchpath_t *search;
+
+	search = Hunk_Alloc(sizeof(searchpath_t));
+	strcpy(search->filename, COM_WRITABLE_BASE);
+	search->next = com_searchpaths;
+	com_searchpaths = search;
+	strcpy(com_gamedir, COM_WRITABLE_BASE);
+    }
+    vmu_added = true;
+#else
     const char *base = COM_WRITABLE_BASE;
 
     if (!base)
@@ -1981,6 +1998,7 @@ COM_AddWritableGameDirectory(const char *gamedir)
 	return;
 
     COM_AddGameDirectory(base, va("%s/%s", COM_WRITABLE_PREFIX, gamedir));
+#endif
 }
 
 /*
@@ -2125,9 +2143,7 @@ COM_InitFilesystem(void)
 #endif
 
 #ifdef DREAMCAST
-    COM_CreatePath(com_gamedir);
-    Sys_mkdir(com_gamedir);
-    Con_Printf("Dreamcast: data %s, saves %s\n", com_basedir, com_gamedir);
+    Con_Printf("Dreamcast: data %s, saves %s (VMU)\n", com_basedir, com_gamedir);
 #else
     /* If home is available, create the game directory */
     if (home) {

@@ -48,6 +48,7 @@ CFILES	+=			source/sv_main.c \
 					source/sprite_model.c \
 					source/snd_dc.c \
 					source/sys_dc.c \
+					source/vmu_dc.c \
 					source/chase.c \
 					source/cl_demo.c \
 					source/cl_input.c \

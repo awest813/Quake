@@ -81,8 +81,8 @@ It is a planning document only — no engine code is changed by this commit.
    clearly-scoped follow-ups, not part of the first bootable build.
 
 7. **Writable storage on VMU.** `/cd` is read-only; configs and save games are
-   stored under `/vmu/a1/tyrquake/id1`, mirroring the Unix `~/.tyrquake/id1`
-   overlay used by other TyrQuake targets.
+   stored flat on `/vmu/a1` (the VMU has no subdirectories).  Files are wrapped
+   with KOS `vmu_pkg` headers so they show up in the BIOS/VMU file manager.
 
 ---
 
@@ -109,8 +109,8 @@ Add a DC cap so the default (no command line) is safe:
 * `Sys_Init`, `Sys_Error`, `Sys_Quit`, `Sys_Printf` (to dbgio/serial console).
 * `Sys_DoubleTime` via KOS `timer_ms_gettime()` / `timer_us_gettime()`.
 * `Sys_FileTime`, `Sys_mkdir`, `Sys_FileOpenRead/Write` — newlib POSIX on `/cd`
-  works for reads; writes (configs/saves) go to `/vmu/a1/tyrquake/id1` via the
-  writable search-path overlay in `common.c`.
+  works for reads; writes (configs/saves) go to flat `/vmu/a1` via
+  `source/vmu_dc.c` (VMS headers through `vmu_pkg_build`).
 * `main()`:
   * KOS init: declare `KOS_INIT_FLAGS(INIT_DEFAULT)` and a romdisk stub.
   * No argv on hardware → build a fixed arg vector (`"quake"`,
@@ -276,6 +276,7 @@ limits), full-game `pak1.pak`, and BBA networking.
   `config.cfg` and `s*.sav` (read-only `/cd` still serves pak data).
 * `scripts/dc/build_disc.sh` — one-step ELF + CDI build when `id1/pak0.pak` is
   supplied locally (`QUAKE_ID1` env or copy into tree).
+* `scripts/dc/run_flycast.sh` — convenience launcher when Flycast is on PATH.
 
 **CI build — verified green, produces a bootable CDI.** A GitHub Actions
 workflow (`.github/workflows/dreamcast.yml`) builds the target inside the

@@ -40,6 +40,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef QW_HACK
 #include "sys.h"
+#include "vmu_dc.h"
 #endif
 
 void (*vid_menudrawfn)(void);
@@ -1295,7 +1296,7 @@ M_ScanSaves(void)
 	snprintf(m_filenames[i], sizeof(m_filenames[i]), "--- UNUSED SLOT ---");
 	loadable[i] = false;
 	snprintf(name, sizeof(name), "%s/s%i.sav", com_gamedir, i);
-	f = fopen(name, "r");
+	f = DC_FOpen(name, "r");
 	if (!f)
 	    continue;
 
@@ -1308,7 +1309,7 @@ M_ScanSaves(void)
 	    if (m_filenames[i][j] == '_')
 		m_filenames[i][j] = ' ';
 	loadable[i] = true;
-	fclose(f);
+	DC_FClose(f);
     }
 }
 

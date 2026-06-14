@@ -31,6 +31,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "screen.h"
 #include "server.h"
 #include "sys.h"
+#include "vmu_dc.h"
 #include "world.h"
 #include "zone.h"
 
@@ -324,7 +325,7 @@ Host_Savegame_f(void)
     }
 
     Con_Printf("Saving game to %s...\n", name);
-    f = fopen(name, "w");
+    f = DC_FOpen(name, "w");
     if (!f) {
 	Con_Printf("ERROR: couldn't open.\n");
 	return;
@@ -354,7 +355,7 @@ Host_Savegame_f(void)
 	ED_Write(f, EDICT_NUM(i));
 	fflush(f);
     }
-    fclose(f);
+    DC_FClose(f);
     Con_Printf("done.\n");
 }
 
@@ -402,7 +403,7 @@ Host_Loadgame_f(void)
 //      SCR_BeginLoadingPlaque();
 
     Con_Printf("Loading game from %s...\n", name);
-    f = fopen(name, "r");
+    f = DC_FOpen(name, "r");
     if (!f) {
 	Con_Printf("ERROR: couldn't open.\n");
 	return;
@@ -410,7 +411,7 @@ Host_Loadgame_f(void)
 
     fscanf(f, "%i\n", &version);
     if (version != SAVEGAME_VERSION) {
-	fclose(f);
+	DC_FClose(f);
 	Con_Printf("Savegame is version %i, not %i\n", version,
 		   SAVEGAME_VERSION);
 	return;
@@ -492,7 +493,7 @@ Host_Loadgame_f(void)
     sv.num_edicts = entnum;
     sv.time = time;
 
-    fclose(f);
+    DC_FClose(f);
 
     for (i = 0; i < NUM_SPAWN_PARMS; i++)
 	svs.clients->spawn_parms[i] = spawn_parms[i];
