@@ -24,6 +24,15 @@ CFLAGS += -DNQ_HACK -DNDEBUG -DELF -DDREAMCAST
 CFLAGS += -DTYR_VERSION=$(TYR_VERSION_NUM) -DQBASEDIR="/cd"
 CFLAGS += -Isource
 
+# Detect vmu_pkg_parse() arity in the installed KOS headers (nold360 = legacy).
+KOS_VMU_API := $(shell printf '%s\n' \
+	'#include <dc/vmu_pkg.h>' \
+	'static int t(uint8_t *d, size_t n, vmu_pkg_t *p) { return vmu_pkg_parse(d, n, p); }' \
+	| $(CC) -c -x c - -o /dev/null 2>/dev/null && echo new || echo legacy)
+ifeq ($(KOS_VMU_API),legacy)
+CFLAGS += -DKOS_VMU_PKG_PARSE_LEGACY
+endif
+
 CFILES = 			source/host.c \
 					source/menu.c \
 					source/screen.c \

@@ -51,6 +51,21 @@ static struct {
 static unsigned dc_read_serial;
 static qboolean dc_icon_ready;
 
+/*
+ * Older KOS (nold360 SDK): int vmu_pkg_parse(uint8 *data, vmu_pkg_t *pkg);
+ * Newer KOS:             int vmu_pkg_parse(uint8_t *data, size_t sz, vmu_pkg_t *pkg);
+ */
+static int
+DC_VMUPkgParse(uint8_t *data, size_t data_size, vmu_pkg_t *pkg)
+{
+#ifdef KOS_VMU_PKG_PARSE_LEGACY
+    (void)data_size;
+    return vmu_pkg_parse(data, pkg);
+#else
+    return vmu_pkg_parse(data, data_size, pkg);
+#endif
+}
+
 static void
 DC_InitVMUIcon(void)
 {
@@ -160,7 +175,7 @@ DC_OpenVMURead(const char *path)
 
     payload = raw;
     payload_len = (int)sz;
-    if (vmu_pkg_parse(raw, sz, &pkg) == 0) {
+    if (DC_VMUPkgParse(raw, (size_t)sz, &pkg) == 0) {
 	payload = pkg.data;
 	payload_len = pkg.data_len;
     }
