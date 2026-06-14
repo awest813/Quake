@@ -48,6 +48,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "net.h"
 #include "shell.h"
 #include "sys.h"
+#include "vmu_dc.h"
 #include "zone.h"
 
 #define NUM_SAFE_ARGVS 7
@@ -1499,15 +1500,15 @@ COM_WriteFile(const char *filename, const void *data, int len)
 
     snprintf(name, sizeof(name), "%s/%s", com_gamedir, filename);
 
-    f = fopen(name, "wb");
+    f = DC_FOpen(name, "wb");
     if (!f) {
 	Sys_mkdir(com_gamedir);
-	f = fopen(name, "wb");
+	f = DC_FOpen(name, "wb");
 	if (!f)
 	    Sys_Error("Error opening %s", filename);
     }
     fwrite(data, 1, len, f);
-    fclose(f);
+    DC_FClose(f);
 }
 
 
@@ -1591,7 +1592,9 @@ COM_FOpenFile(const char *filename, FILE **file)
 	    if (findtime == -1)
 		continue;
 
-	    *file = fopen(path, "rb");
+	    *file = DC_FOpen(path, "rb");
+	    if (!*file)
+		continue;
 	    com_filesize = COM_filelength(*file);
 	    return com_filesize;
 	}
@@ -1949,8 +1952,55 @@ COM_AddGameDirectory(const char *base, const char *dir)
 	search = Hunk_Alloc(sizeof(searchpath_t));
 	search->pack = pak;
 	search->next = com_searchpaths;
-	com_searchpaths = search;
+    com_searchpaths = search;
     }
+}
+
+#ifdef DREAMCAST
+/* GD-ROM (/cd) is read-only; configs and saves go to the first VMU. */
+#define COM_WRITABLE_BASE "/vmu/a1"
+#else
+#define COM_WRITABLE_BASE NULL
+#define COM_WRITABLE_PREFIX ".tyrquake"
+#endif
+
+/*
+================
+COM_AddWritableGameDirectory
+
+Adds a writable overlay for configs/saves.  On Unix this is ~/.tyrquake/<gamedir>.
+On Dreamcast the VMU is flat (no subdirectories), so we add /vmu/a1 once.
+================
+*/
+static void
+COM_AddWritableGameDirectory(const char *gamedir)
+{
+#ifdef DREAMCAST
+    static qboolean vmu_added;
+
+    (void)gamedir;
+    if (vmu_added)
+	return;
+    {
+	searchpath_t *search;
+
+	search = Hunk_Alloc(sizeof(searchpath_t));
+	strcpy(search->filename, COM_WRITABLE_BASE);
+	search->next = com_searchpaths;
+	com_searchpaths = search;
+	strcpy(com_gamedir, COM_WRITABLE_BASE);
+    }
+    vmu_added = true;
+#else
+    const char *base = COM_WRITABLE_BASE;
+
+    if (!base)
+	base = getenv("HOME");
+    if (!base)
+	return;
+
+    COM_AddGameDirectory(base, va("%s/%s", COM_WRITABLE_PREFIX, gamedir));
+#endif
 }
 
 /*
@@ -2037,12 +2087,16 @@ static void
 COM_InitFilesystem(void)
 {
     int i;
+#ifndef DREAMCAST
     char *home;
+#endif
 #ifdef NQ_HACK
     searchpath_t *search;
 #endif
 
+#ifndef DREAMCAST
     home = getenv("HOME");
+#endif
 
 //
 // -basedir <path>
@@ -2058,20 +2112,20 @@ COM_InitFilesystem(void)
 // start up with id1 by default
 //
     COM_AddGameDirectory(com_basedir, "id1");
-    COM_AddGameDirectory(home, ".tyrquake/id1");
+    COM_AddWritableGameDirectory("id1");
 
 #ifdef NQ_HACK
     if (COM_CheckParm("-rogue")) {
 	COM_AddGameDirectory(com_basedir, "rogue");
-	COM_AddGameDirectory(home, ".tyrquake/rogue");
+	COM_AddWritableGameDirectory("rogue");
     }
     if (COM_CheckParm("-hipnotic")) {
 	COM_AddGameDirectory(com_basedir, "hipnotic");
-	COM_AddGameDirectory(home, ".tyrquake/hipnotic");
+	COM_AddWritableGameDirectory("hipnotic");
     }
     if (COM_CheckParm("-quoth")) {
 	COM_AddGameDirectory(com_basedir, "quoth");
-	COM_AddGameDirectory(home, ".tyrquake/quoth");
+	COM_AddWritableGameDirectory("quoth");
     }
 
 //
@@ -2082,19 +2136,23 @@ COM_InitFilesystem(void)
     if (i && i < com_argc - 1) {
 	com_modified = true;
 	COM_AddGameDirectory(com_basedir, com_argv[i + 1]);
-	COM_AddGameDirectory(home, va(".tyrquake/%s", com_argv[i + 1]));
+	COM_AddWritableGameDirectory(com_argv[i + 1]);
     }
 #endif
 #ifdef QW_HACK
     COM_AddGameDirectory(com_basedir, "qw");
-    COM_AddGameDirectory(home, ".tyrquake/qw");
+    COM_AddWritableGameDirectory("qw");
 #endif
 
+#ifdef DREAMCAST
+    Con_Printf("Dreamcast: data %s, saves %s (VMU)\n", com_basedir, com_gamedir);
+#else
     /* If home is available, create the game directory */
     if (home) {
 	COM_CreatePath(com_gamedir);
 	Sys_mkdir(com_gamedir);
     }
+#endif
 
 //
 // -path <dir or packfile> [<dir or packfile>] ...

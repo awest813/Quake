@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "protocol.h"
 #include "quakedef.h"
 #include "sys.h"
+#include "vmu_dc.h"
 #include "zone.h"
 
 static void CL_FinishTimeDemo(void);
@@ -59,7 +60,7 @@ CL_StopPlayback(void)
     if (!cls.demoplayback)
 	return;
 
-    fclose(cls.demofile);
+    DC_FClose(cls.demofile);
     cls.demoplayback = false;
     cls.demofile = NULL;
     cls.state = ca_disconnected;
@@ -187,7 +188,7 @@ CL_Stop_f(void)
     CL_WriteDemoMessage();
 
 // finish up
-    fclose(cls.demofile);
+    DC_FClose(cls.demofile);
     cls.demofile = NULL;
     cls.demorecording = false;
     Con_Printf("Completed demo\n");
@@ -250,7 +251,7 @@ CL_Record_f(void)
 
     /* open the demo file */
     Con_Printf("recording to %s.\n", name);
-    cls.demofile = fopen(name, "wb");
+    cls.demofile = DC_FOpen(name, "wb");
     if (!cls.demofile) {
 	Con_Printf("ERROR: couldn't open.\n");
 	return;
@@ -339,7 +340,7 @@ CL_PlayDemo_f(void)
     return;
 
  error_out:
-    fclose(cls.demofile);
+    DC_FClose(cls.demofile);
     cls.demofile = NULL;
     cls.demonum = -1;
 }

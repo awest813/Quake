@@ -50,31 +50,63 @@ static uint8_t *dc_buf;
 static unsigned rpos;
 static unsigned wpos;
 
-/* Linear scratch handed back to KOS each callback. */
-static uint8_t cbbuf[SND_STREAM_BUFFER_MAX];
+/*
+ * Linear scratch handed back to KOS each callback.  KOS snd_stream_fill()
+ * passes smp_req/smp_recv in bytes (16-bit stereo PCM = interleaved int16).
+ * 32-byte alignment is recommended by KOS for DMA into AICA RAM.
+ */
+static uint8_t cbbuf[SND_STREAM_BUFFER_MAX] __attribute__((aligned(32)));
 
 static void *
-stream_cb(snd_stream_hnd_t hnd, int smp_req, int *smp_recv)
+stream_cb(snd_stream_hnd_t hnd, int bytes_req, int *bytes_recv)
 {
-    int len = smp_req;
+    int len = bytes_req;
     int off = 0;
+    unsigned used, chunk, first;
+
+    (void)hnd;
+
+    if (len <= 0) {
+	*bytes_recv = 0;
+	return cbbuf;
+    }
 
     if (len > (int)sizeof(cbbuf))
 	len = sizeof(cbbuf);
 
     while (len > 0) {
-	unsigned avail = dc_buflen - rpos;
-	unsigned chunk = ((unsigned)len < avail) ? (unsigned)len : avail;
+	if (wpos >= rpos)
+	    used = wpos - rpos;
+	else
+	    used = dc_buflen - rpos + wpos;
 
-	memcpy(cbbuf + off, dc_buf + rpos, chunk);
-	rpos += chunk;
+	if (!used) {
+	    memset(cbbuf + off, 0, len);
+	    off += len;
+	    break;
+	}
+
+	chunk = used;
+	if (chunk > (unsigned)len)
+	    chunk = (unsigned)len;
+
+	if (rpos + chunk > dc_buflen) {
+	    first = dc_buflen - rpos;
+	    memcpy(cbbuf + off, dc_buf + rpos, first);
+	    memcpy(cbbuf + off + first, dc_buf, chunk - first);
+	    rpos = chunk - first;
+	} else {
+	    memcpy(cbbuf + off, dc_buf + rpos, chunk);
+	    rpos += chunk;
+	    if (rpos >= dc_buflen)
+		rpos = 0;
+	}
+
 	off += chunk;
 	len -= chunk;
-	if (rpos >= dc_buflen)
-	    rpos = 0;
     }
 
-    *smp_recv = off;
+    *bytes_recv = off;
     return cbbuf;
 }
 

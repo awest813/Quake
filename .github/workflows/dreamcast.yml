@@ -54,6 +54,9 @@ jobs:
               ls -l quake.elf quake.cdi cd_root/1ST_READ.BIN IP.BIN 2>/dev/null || true
             '
 
+      - name: Test all Dreamcast phases
+        run: sh ./scripts/dc/test_all_phases.sh
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

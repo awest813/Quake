@@ -1,6 +1,8 @@
 # Software Name
 PROGRAM = quake.elf
 
+# Dreamcast-specific sources (replace SDL/unix backends):
+#   sys_dc.c  vid_dc.c  in_dc.c  snd_dc.c  vmu_dc.c
 # Compiler
 #
 # Build from a DreamSDK / KallistiOS shell with the KOS environment sourced
@@ -21,6 +23,12 @@ CFLAGS  = -O2 -ml -m4-single-only -ffunction-sections -fdata-sections
 CFLAGS += -DNQ_HACK -DNDEBUG -DELF -DDREAMCAST
 CFLAGS += -DTYR_VERSION=$(TYR_VERSION_NUM) -DQBASEDIR="/cd"
 CFLAGS += -Isource
+
+# nold360/kallistios-sdk (CI image) ships legacy 2-arg vmu_pkg_parse().
+# Pass KOS_VMU_PKG_NEW=1 when building against newer KallistiOS.
+ifndef KOS_VMU_PKG_NEW
+CFLAGS += -DKOS_VMU_PKG_PARSE_LEGACY
+endif
 
 CFILES = 			source/host.c \
 					source/menu.c \
@@ -48,6 +56,7 @@ CFILES	+=			source/sv_main.c \
 					source/sprite_model.c \
 					source/snd_dc.c \
 					source/sys_dc.c \
+					source/vmu_dc.c \
 					source/chase.c \
 					source/cl_demo.c \
 					source/cl_input.c \

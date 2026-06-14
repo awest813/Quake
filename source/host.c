@@ -36,6 +36,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "server.h"
 #include "sound.h"
 #include "sys.h"
+#include "vmu_dc.h"
 #include "view.h"
 #include "wad.h"
 
@@ -275,7 +276,7 @@ Host_WriteConfiguration(void)
 // dedicated servers initialize the host but don't parse and set the
 // config.cfg cvars
     if (host_initialized & !isDedicated) {
-	f = fopen(va("%s/config.cfg", com_gamedir), "w");
+	f = DC_FOpen(va("%s/config.cfg", com_gamedir), "w");
 	if (!f) {
 	    Con_Printf("Couldn't write config.cfg.\n");
 	    return;
@@ -284,7 +285,7 @@ Host_WriteConfiguration(void)
 	Key_WriteBindings(f);
 	Cvar_WriteVariables(f);
 
-	fclose(f);
+	DC_FClose(f);
     }
 }
 
@@ -860,6 +861,11 @@ Host_Init(quakeparms_t *parms)
 	Cbuf_InsertText("exec quake.rc\n");
 	Cbuf_Execute();
     }
+
+#ifdef DREAMCAST
+    /* quake.rc binds keys for keyboard; restore pad defaults afterward. */
+    IN_DC_ApplyBindings();
+#endif
 }
 
 
