@@ -22,13 +22,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  *
  * The software rasteriser draws into an 8-bit palettised offscreen buffer
  * (vid.buffer).  Each frame we convert that buffer to RGB565 through a 256
- * entry lookup table and present it.  The Dreamcast runs in a 640x480 RGB565
- * mode and the 320x240 image is pixel-doubled to fill the screen; offloading
- * the upscale to the PVR with a textured quad is a later optimisation.
+ * entry lookup table, upload it to a PVR texture, and draw a single textured
+ * quad scaled to 640x480 so the hardware handles the 2x upscale.
  */
 
 #include <kos.h>
 #include <dc/video.h>
+#include <dc/pvr.h>
 
 #include "quakedef.h"
 #include "d_local.h"
@@ -51,6 +51,81 @@ uint8_t *VGA_pagebase;
 
 /* 320x240 8-bit offscreen the rasteriser renders into. */
 static uint8_t dc_framebuffer[BASEWIDTH * BASEHEIGHT];
+
+/* PVR texture is the next power-of-two above 320x240 (512x256 RGB565). */
+#define DC_TEX_W	512
+#define DC_TEX_H	256
+
+static pvr_ptr_t dc_pvr_texture;
+static uint16_t *dc_rgb565;
+static pvr_poly_hdr_t dc_pvr_hdr;
+static qboolean dc_pvr_ready;
+
+static void
+DC_PVR_Init(void)
+{
+    pvr_poly_cxt_t cxt;
+
+    if (pvr_init_defaults() < 0)
+	Sys_Error("PVR init failed\n");
+
+    pvr_set_bg_color(0.0f, 0.0f, 0.0f);
+
+    dc_pvr_texture = pvr_mem_malloc(DC_TEX_W * DC_TEX_H * 2);
+    if (!dc_pvr_texture)
+	Sys_Error("Not enough PVR RAM for frame texture\n");
+
+    dc_rgb565 = Hunk_AllocName(DC_TEX_W * DC_TEX_H * 2, "dc_rgb565");
+    if (!dc_rgb565)
+	Sys_Error("Not enough memory for RGB565 scratch\n");
+
+    pvr_poly_cxt_txr(&cxt, PVR_LIST_OP_POLY,
+		     PVR_TXRFMT_RGB565 | PVR_TXRFMT_NONTWIDDLED,
+		     DC_TEX_W, DC_TEX_H, dc_pvr_texture, PVR_FILTER_NONE);
+    pvr_poly_compile(&dc_pvr_hdr, &cxt);
+    dc_pvr_ready = true;
+}
+
+static void
+DC_PVR_Present(void)
+{
+    pvr_vertex_t vert;
+    const float umax = (float)BASEWIDTH / (float)DC_TEX_W;
+    const float vmax = (float)BASEHEIGHT / (float)DC_TEX_H;
+
+    pvr_scene_begin();
+    pvr_list_begin(PVR_LIST_OP_POLY);
+    pvr_prim(&dc_pvr_hdr, sizeof(dc_pvr_hdr));
+
+    vert.flags = PVR_CMD_VERTEX;
+    vert.z = 1.0f;
+    vert.argb = PVR_PACK_COLOR(1.0f, 1.0f, 1.0f, 1.0f);
+    vert.oargb = 0;
+
+    vert.x = 0.0f;
+    vert.y = 480.0f;
+    vert.u = 0.0f;
+    vert.v = vmax;
+    pvr_prim(&vert, sizeof(vert));
+
+    vert.y = 0.0f;
+    vert.v = 0.0f;
+    pvr_prim(&vert, sizeof(vert));
+
+    vert.x = 640.0f;
+    vert.y = 480.0f;
+    vert.u = umax;
+    vert.v = vmax;
+    pvr_prim(&vert, sizeof(vert));
+
+    vert.flags = PVR_CMD_VERTEX_EOL;
+    vert.y = 0.0f;
+    vert.v = 0.0f;
+    pvr_prim(&vert, sizeof(vert));
+
+    pvr_list_finish();
+    pvr_scene_finish();
+}
 
 void
 VID_SetPalette(const uint8_t *palette)
@@ -96,8 +171,8 @@ VID_Init(const uint8_t *palette)
     VGA_height = vid.height;
     VGA_rowubytes = vid.rowbytes;
 
-    /* 640x480 16-bit; the 320x240 image is doubled into it. */
     vid_set_mode(DM_640x480, PM_RGB565);
+    DC_PVR_Init();
 
     VID_SetPalette(palette);
 
@@ -119,6 +194,12 @@ VID_Init(const uint8_t *palette)
 void
 VID_Shutdown(void)
 {
+    if (dc_pvr_ready) {
+	pvr_mem_free(dc_pvr_texture);
+	dc_pvr_texture = NULL;
+	pvr_shutdown();
+	dc_pvr_ready = false;
+    }
 }
 
 void
@@ -126,23 +207,21 @@ VID_Update(vrect_t *rects)
 {
     int x, y;
     const uint8_t *src = vid.buffer;
-    uint16_t *vram = vram_s;	/* KOS 16-bit framebuffer pointer */
 
-    /* Full-frame 8->565 conversion with 2x pixel doubling (320x240 -> 640x480). */
+    (void)rects;
+
+    /* 8-bit palettised buffer -> RGB565 in a 512x256 scratch texture. */
     for (y = 0; y < BASEHEIGHT; y++) {
-	uint16_t *d0 = vram + (y * 2) * 640;
-	uint16_t *d1 = d0 + 640;
+	uint16_t *dst = dc_rgb565 + y * DC_TEX_W;
 	const uint8_t *s = src + y * BASEWIDTH;
 
-	for (x = 0; x < BASEWIDTH; x++) {
-	    uint16_t c = d_8to16table[s[x]];
-	    d0[0] = d0[1] = c;
-	    d1[0] = d1[1] = c;
-	    d0 += 2;
-	    d1 += 2;
-	}
+	for (x = 0; x < BASEWIDTH; x++)
+	    dst[x] = d_8to16table[s[x]];
     }
 
+    pvr_txr_load_ex(dc_rgb565, dc_pvr_texture, DC_TEX_W, DC_TEX_H,
+		    PVR_TXRLOAD_16BPP | PVR_TXRLOAD_FMT_NOTWIDDLE);
+    DC_PVR_Present();
     vid_waitvbl();
 }
 

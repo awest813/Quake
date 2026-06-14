@@ -247,8 +247,9 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `source/zone.c` — `Memory_GetSize()` capped at 8 MB for `DREAMCAST`.
 * `source/sys_dc.c` — KOS init (`KOS_INIT_FLAGS(INIT_DEFAULT)`), timing via
   `timer_us_gettime64`, file I/O over newlib, fixed-argv `main()`, `basedir=/cd`.
-* `source/vid_dc.c` — 320×240 8-bit offscreen → RGB565 present (2× pixel-doubled
-  into the 640×480 framebuffer), palette LUT, surface-cache setup, direct-rect.
+* `source/vid_dc.c` — 320×240 8-bit offscreen → RGB565 PVR texture, presented
+  with a hardware-scaled 640×480 textured quad (`pvr_init_defaults` +
+  `pvr_txr_load_ex`); palette LUT, surface-cache setup, direct-rect.
 * `source/in_dc.c` — Maple controller polling → `Key_Event`, analog stick →
   `IN_Move`, triggers as `K_AUX1/2`.
 * `source/snd_dc.c` — AICA `snd_stream` backend with a ring buffer pumped by
@@ -262,9 +263,14 @@ limits), full-game `pak1.pak`, and BBA networking.
 * `source/in_dc.c` — single-stick layout: stick X turns, stick Y walks,
   analog triggers strafe, d-pad looks/strafes; DC-specific default binds
   applied in `IN_Init()` so the pad works without a mouse or keyboard.
-* `source/vid_dc.c` — `vid_waitvbl()` after each frame present to reduce tearing.
+* `source/vid_dc.c` — `vid_waitvbl()` after each PVR frame present.
 
-**Phase 5 (VMU saves, partial) — in progress:**
+**Phase 3 (PVR present) — done:**
+
+* `source/vid_dc.c` — replaced CPU 2× pixel-doubled blit to `vram_s` with a
+  PVR textured quad so the 320→640 upscale runs on the graphics chip.
+
+**Phase 5 (VMU saves, partial) — done:**
 
 * `source/common.c` — writable overlay at `/vmu/a1/tyrquake/id1` for
   `config.cfg` and `s*.sav` (read-only `/cd` still serves pak data).
