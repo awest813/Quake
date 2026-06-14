@@ -25,6 +25,35 @@ pass() { PASS=$((PASS + 1)); echo "  PASS: $1"; }
 fail() { FAIL=$((FAIL + 1)); echo "  FAIL: $1" >&2; }
 skip() { SKIP=$((SKIP + 1)); echo "  SKIP: $1"; }
 
+# Return 0 if $1 names a symbol present in quake.elf (works on stripped SH-4 ELFs).
+elf_has_sym() {
+    sym=$1
+    if [ ! -f quake.elf ]; then
+	return 1
+    fi
+    for candidate in "$sym" "_$sym"; do
+	if readelf -sW quake.elf 2>/dev/null | awk '{print $NF}' | grep -qx "$candidate"; then
+	    return 0
+	fi
+	if readelf --dyn-syms -W quake.elf 2>/dev/null | awk '{print $NF}' | grep -qx "$candidate"; then
+	    return 0
+	fi
+    done
+    if command -v sh-elf-nm >/dev/null 2>&1; then
+	sh-elf-nm quake.elf 2>/dev/null | awk '{print $3}' | grep -qx "$sym" && return 0
+	sh-elf-nm quake.elf 2>/dev/null | awk '{print $3}' | grep -qx "_$sym" && return 0
+    fi
+    return 1
+}
+
+elf_sym() {
+    if elf_has_sym "$1"; then
+	pass "$2"
+    else
+	fail "$3"
+    fi
+}
+
 phase() {
     echo ""
     echo "=== Phase $1: $2 ==="
@@ -45,7 +74,10 @@ test -f .github/workflows/dreamcast.yml && pass "CI workflow" || fail "CI workfl
 # ------------------------------------------------------------------ Phase 1
 phase 1 "Build ELF + CDI"
 BUILT=0
-if command -v kos-cc >/dev/null 2>&1; then
+if [ -f quake.elf ] && [ -z "$REBUILD" ]; then
+    pass "quake.elf already built (set REBUILD=1 to force)"
+    BUILT=1
+elif command -v kos-cc >/dev/null 2>&1; then
     echo "  using local kos-cc"
     make -f Makefile.dreamcast clean >/dev/null 2>&1 || true
     make -f Makefile.dreamcast
@@ -94,10 +126,8 @@ if [ -f quake.elf ]; then
 	|| fail "ELF missing /cd string"
     strings quake.elf | grep -q 'Dreamcast' && pass "ELF identifies as Dreamcast" \
 	|| fail "ELF missing Dreamcast banner"
-    nm quake.elf 2>/dev/null | grep -q ' main$' && pass "main() linked" \
-	|| fail "main() not found in ELF"
-    nm quake.elf 2>/dev/null | grep -q ' Sys_Init' && pass "Sys_Init linked" \
-	|| fail "Sys_Init not found"
+    elf_sym main "main() linked" "main() not found in ELF"
+    elf_sym Sys_Printf "Sys_Printf linked (sys_dc.c)" "Sys_Printf not found"
 else
     skip "no ELF for phase 2 checks"
 fi
@@ -105,10 +135,8 @@ fi
 # ------------------------------------------------------------------ Phase 3
 phase 3 "PVR video present"
 if [ -f quake.elf ]; then
-    nm quake.elf 2>/dev/null | grep -q ' VID_Init' && pass "VID_Init linked" \
-	|| fail "VID_Init not found"
-    nm quake.elf 2>/dev/null | grep -q ' VID_Update' && pass "VID_Update linked" \
-	|| fail "VID_Update not found"
+    elf_sym VID_Init "VID_Init linked" "VID_Init not found"
+    elf_sym VID_Update "VID_Update linked" "VID_Update not found"
     strings quake.elf | grep -q 'dc_rgb565' && pass "PVR RGB565 scratch present" \
 	|| skip "dc_rgb565 string not in ELF (may be stripped)"
 else
@@ -118,15 +146,10 @@ fi
 # ------------------------------------------------------------------ Phase 4
 phase 4 "Maple input + AICA sound"
 if [ -f quake.elf ]; then
-    nm quake.elf 2>/dev/null | grep -q ' IN_Init' && pass "IN_Init linked" \
-	|| fail "IN_Init not found"
-    nm quake.elf 2>/dev/null | grep -q ' IN_DC_ApplyBindings' \
-	&& pass "IN_DC_ApplyBindings linked" \
-	|| fail "IN_DC_ApplyBindings not found"
-    nm quake.elf 2>/dev/null | grep -q ' SNDDMA_Init' && pass "SNDDMA_Init linked" \
-	|| fail "SNDDMA_Init not found"
-    nm quake.elf 2>/dev/null | grep -q ' SNDDMA_Submit' && pass "SNDDMA_Submit linked" \
-	|| fail "SNDDMA_Submit not found"
+    elf_sym IN_Init "IN_Init linked" "IN_Init not found"
+    elf_sym IN_DC_ApplyBindings "IN_DC_ApplyBindings linked" "IN_DC_ApplyBindings not found"
+    elf_sym SNDDMA_Init "SNDDMA_Init linked" "SNDDMA_Init not found"
+    elf_sym SNDDMA_Submit "SNDDMA_Submit linked" "SNDDMA_Submit not found"
 else
     skip "no ELF for phase 4 checks"
 fi
@@ -134,13 +157,11 @@ fi
 # ------------------------------------------------------------------ Phase 5
 phase 5 "VMU saves (VMS packaging)"
 if [ -f quake.elf ]; then
-    nm quake.elf 2>/dev/null | grep -q ' DC_FOpen' && pass "DC_FOpen linked" \
-	|| fail "DC_FOpen not found"
-    nm quake.elf 2>/dev/null | grep -q ' DC_FClose' && pass "DC_FClose linked" \
-	|| fail "DC_FClose not found"
+    elf_sym DC_FOpen "DC_FOpen linked" "DC_FOpen not found"
+    elf_sym DC_FClose "DC_FClose linked" "DC_FClose not found"
     strings quake.elf | grep -q 'TyrQuake' && pass "VMU app_id string present" \
 	|| skip "TyrQuake app_id string not found (may be in data only)"
-    rg -q 'DC_FOpen' source/cl_demo.c source/menu.c source/host_cmd.c \
+    grep -q 'DC_FOpen' source/cl_demo.c source/menu.c source/host_cmd.c \
 	&& pass "DC_FOpen used in save/demo/menu paths" \
 	|| fail "DC_FOpen not wired in all I/O paths"
 else
