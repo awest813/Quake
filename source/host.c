@@ -861,6 +861,11 @@ Host_Init(quakeparms_t *parms)
 	Cbuf_InsertText("exec quake.rc\n");
 	Cbuf_Execute();
     }
+
+#ifdef DREAMCAST
+    /* quake.rc binds keys for keyboard; restore pad defaults afterward. */
+    IN_DC_ApplyBindings();
+#endif
 }
 
 

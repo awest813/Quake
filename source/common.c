@@ -1593,6 +1593,8 @@ COM_FOpenFile(const char *filename, FILE **file)
 		continue;
 
 	    *file = DC_FOpen(path, "rb");
+	    if (!*file)
+		continue;
 	    com_filesize = COM_filelength(*file);
 	    return com_filesize;
 	}

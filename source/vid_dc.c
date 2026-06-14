@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
 #include <kos.h>
+#include <arch/cache.h>
 #include <dc/video.h>
 #include <dc/pvr.h>
 
@@ -219,6 +220,10 @@ VID_Update(vrect_t *rects)
 	    dst[x] = d_8to16table[s[x]];
     }
 
+    if (!dc_pvr_ready)
+	return;
+
+    dcache_flush_range((uintptr_t)dc_rgb565, DC_TEX_W * DC_TEX_H * 2);
     pvr_txr_load_ex(dc_rgb565, dc_pvr_texture, DC_TEX_W, DC_TEX_H,
 		    PVR_TXRLOAD_16BPP | PVR_TXRLOAD_FMT_NOTWIDDLE);
     DC_PVR_Present();

@@ -34,6 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 #include "cvar.h"
 #include "host.h"
+#include "input.h"
 #include "keys.h"
 #include "mathlib.h"
 #include "sys.h"
@@ -56,7 +57,7 @@ static const struct {
     { CONT_DPAD_DOWN,  K_DOWNARROW },
     { CONT_DPAD_LEFT,  K_LEFTARROW },
     { CONT_DPAD_RIGHT, K_RIGHTARROW },
-    { CONT_A,          K_ENTER },	/* A: jump */
+    { CONT_A,          K_ENTER },	/* A: jump (see IN_DC_ApplyBindings) */
     { CONT_B,          K_SPACE },	/* B: attack */
     { CONT_X,          K_CTRL },	/* X: use */
     { CONT_Y,          K_SHIFT },	/* Y: run */
@@ -65,8 +66,8 @@ static const struct {
 
 #define DC_NUM_BUTTONS (sizeof(dc_buttonmap) / sizeof(dc_buttonmap[0]))
 
-static void
-IN_DC_SetDefaultBindings(void)
+void
+IN_DC_ApplyBindings(void)
 {
     /*
      * Applied after quake.rc so a Dreamcast pad is playable without a mouse.
@@ -88,7 +89,6 @@ void
 IN_Init(void)
 {
     old_buttons = 0;
-    IN_DC_SetDefaultBindings();
 }
 
 void

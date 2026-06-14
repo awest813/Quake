@@ -58,20 +58,43 @@ stream_cb(snd_stream_hnd_t hnd, int smp_req, int *smp_recv)
 {
     int len = smp_req;
     int off = 0;
+    unsigned used, chunk, first;
+
+    (void)hnd;
 
     if (len > (int)sizeof(cbbuf))
 	len = sizeof(cbbuf);
 
     while (len > 0) {
-	unsigned avail = dc_buflen - rpos;
-	unsigned chunk = ((unsigned)len < avail) ? (unsigned)len : avail;
+	if (wpos >= rpos)
+	    used = wpos - rpos;
+	else
+	    used = dc_buflen - rpos + wpos;
 
-	memcpy(cbbuf + off, dc_buf + rpos, chunk);
-	rpos += chunk;
+	if (!used) {
+	    memset(cbbuf + off, 0, len);
+	    off += len;
+	    break;
+	}
+
+	chunk = used;
+	if (chunk > (unsigned)len)
+	    chunk = (unsigned)len;
+
+	if (rpos + chunk > dc_buflen) {
+	    first = dc_buflen - rpos;
+	    memcpy(cbbuf + off, dc_buf + rpos, first);
+	    memcpy(cbbuf + off + first, dc_buf, chunk - first);
+	    rpos = chunk - first;
+	} else {
+	    memcpy(cbbuf + off, dc_buf + rpos, chunk);
+	    rpos += chunk;
+	    if (rpos >= dc_buflen)
+		rpos = 0;
+	}
+
 	off += chunk;
 	len -= chunk;
-	if (rpos >= dc_buflen)
-	    rpos = 0;
     }
 
     *smp_recv = off;

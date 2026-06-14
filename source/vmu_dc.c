@@ -29,11 +29,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <kos.h>
 #include <dc/vmu_pkg.h>
 
+#include "console.h"
 #include "quakedef.h"
 #include "sys.h"
 #include "vmu_dc.h"
 
-/* One-frame 32x32 4bpp icon (mostly blank; palette gives a brown Quake tile). */
+/* One-frame 32x32 4bpp icon (brown/orange Quake tile in the centre). */
 static const uint16_t dc_vmu_icon_pal[16] = {
     0x0000, 0xFFFF, 0xFD60, 0xFB40, 0xF920, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -48,6 +49,26 @@ static struct {
 } dc_stage;
 
 static unsigned dc_read_serial;
+static qboolean dc_icon_ready;
+
+static void
+DC_InitVMUIcon(void)
+{
+    int y, x;
+    uint8_t n;
+
+    if (dc_icon_ready)
+	return;
+
+    memset(dc_vmu_icon_bits, 0, sizeof(dc_vmu_icon_bits));
+    for (y = 10; y < 22; y++) {
+	for (x = 10; x < 22; x++) {
+	    n = (uint8_t)((y > 11 && y < 20 && x > 11 && x < 20) ? 0x33 : 0x22);
+	    dc_vmu_icon_bits[(y * 32 + x) / 2] |= (x & 1) ? n : (n << 4);
+	}
+    }
+    dc_icon_ready = true;
+}
 
 qboolean
 DC_IsVMUPath(const char *path)
@@ -64,18 +85,23 @@ DC_PackageAndWrite(const char *vmu_path, const void *data, int len)
     FILE *f;
     const char *base;
 
+    if (len <= 0)
+	return 0;
+
+    DC_InitVMUIcon();
+
     memset(&pkg, 0, sizeof(pkg));
     base = strrchr(vmu_path, '/');
     base = base ? base + 1 : vmu_path;
 
     snprintf(pkg.desc_short, sizeof(pkg.desc_short), "%.16s", base);
     snprintf(pkg.desc_long, sizeof(pkg.desc_long), "Quake %.32s", base);
-    strncpy(pkg.app_id, "TyrQuake/DC", sizeof(pkg.app_id) - 1);
+    strncpy(pkg.app_id, "TyrQuake\\DC", sizeof(pkg.app_id) - 1);
     pkg.icon_cnt = 1;
     pkg.icon_anim_speed = 0;
     pkg.eyecatch_type = VMUPKG_EC_NONE;
     memcpy(pkg.icon_pal, dc_vmu_icon_pal, sizeof(pkg.icon_pal));
-    pkg.icon_data = (uint8_t *)dc_vmu_icon_bits;
+    pkg.icon_data = dc_vmu_icon_bits;
     pkg.data = (const uint8_t *)data;
     pkg.data_len = len;
 
@@ -155,13 +181,16 @@ DC_OpenVMURead(const char *path)
 FILE *
 DC_FOpen(const char *path, const char *mode)
 {
+    if (!path || !mode)
+	return NULL;
+
     if (!DC_IsVMUPath(path))
 	return fopen(path, mode);
 
-    if (mode && mode[0] == 'r')
+    if (mode[0] == 'r')
 	return DC_OpenVMURead(path);
 
-    if (mode && (mode[0] == 'w' || mode[0] == 'a')) {
+    if (mode[0] == 'w' || mode[0] == 'a') {
 	if (dc_stage.fp)
 	    return NULL;
 	snprintf(dc_stage.ram, sizeof(dc_stage.ram), "/ram/qdc");
@@ -181,7 +210,10 @@ DC_FClose(FILE *file)
     long len;
     uint8_t *buf;
 
-    if (file && file == dc_stage.fp) {
+    if (!file)
+	return;
+
+    if (file == dc_stage.fp) {
 	fclose(dc_stage.fp);
 	dc_stage.fp = NULL;
 
@@ -198,8 +230,10 @@ DC_FClose(FILE *file)
 	if (len > 0) {
 	    buf = malloc(len);
 	    if (buf) {
-		if (fread(buf, 1, len, f) == (size_t)len)
-		    DC_PackageAndWrite(dc_stage.vmu, buf, (int)len);
+		if (fread(buf, 1, len, f) == (size_t)len) {
+		    if (DC_PackageAndWrite(dc_stage.vmu, buf, (int)len) < 0)
+			Con_Printf("VMU: failed to write %s\n", dc_stage.vmu);
+		}
 		free(buf);
 	    }
 	}

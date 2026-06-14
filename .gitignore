@@ -4,3 +4,10 @@
 id1/
 id1/*.pak
 *.pak
+quake.bin
+quake.iso
+quake.cdi
+cd_root/
+IP.BIN
+ip.txt
+IP.TMPL

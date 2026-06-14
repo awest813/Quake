@@ -436,6 +436,7 @@ Host_Loadgame_f(void)
     SV_SpawnServer(mapname);
 
     if (!sv.active) {
+	DC_FClose(f);
 	Con_Printf("Couldn't load map\n");
 	return;
     }
